@@ -272,3 +272,26 @@ class API(object):
             return self.__dict__[key]
 
         return Resource(url=urljoin(self.base_url, str(key)))
+
+
+def get_issues(owner, repo):
+    repo_api = API('https://api.github.com/repos/{user}/{repo}'.format(
+        user=owner, repo=repo))
+
+    return repo_api.issues.get().json()
+
+
+def get_issue_details(owner, repo, number):
+    repo_api = API('https://api.github.com/repos/{user}/{repo}'.format(
+        user=owner, repo=repo))
+
+    details = repo_api.issues(number).get().json()
+    if not details['comments']:
+        details['comments_list'] = []
+    else:
+        comments_api = API('https://api.github.com/repos/{user}/{repo}/issues/{num}'.format(
+            user=owner, repo=repo, num=number))
+
+        details['comments_list'] = comments_api.comments.get().json()
+
+    return details

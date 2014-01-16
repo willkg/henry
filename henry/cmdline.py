@@ -1,11 +1,13 @@
 from optparse import OptionParser
+import json
+import os
 import subprocess
 import textwrap
 
 import blessings
 
 from henry import __version__
-from henry.restapi import API
+from henry.restapi import API, get_issues, get_issue_details
 
 
 USAGE = '%prog [options] [command] [command-options]'
@@ -18,6 +20,18 @@ def git(*args):
     args = list(args)
     args.insert(0, 'git')
     return subprocess.check_output(args)
+
+
+def save_cache(data):
+    fn = os.path.join('.git', 'github_issues.json')
+    with open(fn, 'w') as fp:
+        fp.write(json.dumps(data))
+
+
+def load_cache():
+    fn = os.path.join('.git', 'github_issues.json')
+    with open(fn, 'r') as fp:
+        return json.load(fp)
 
 
 def get_remote(remotename='origin'):
@@ -64,11 +78,14 @@ def list_cmd(scriptname, cmd, argv):
         print 'GAH! Do not recognize url: {0}'.format(remote_url)
         return 1
 
-    repo_api = API('https://api.github.com/repos/{user}/{repo}'.format(
-        user=user, repo=repo))
+    try:
+        issues_list = get_issues(user, repo)
+    except Exception as exc:
+        print exc
+        print 'Getting issue list from cache ...'
+        issues_list = load_cache()['get_issues']
 
-    issues = repo_api.issues.get().json()
-    for issue in issues:
+    for issue in issues_list:
         print TERM.bold_white('#{number}: {title}'.format(
             number=str(issue['number']),
             title=issue['title']))
@@ -79,7 +96,7 @@ def list_cmd(scriptname, cmd, argv):
 def view_cmd(scriptname, cmd, argv):
     """Views a specific issue"""
     parser = build_parser(
-        'usage: %prog list [OPTIONS]',
+        'usage: %prog view [OPTIONS] NUM',
         description='Views a specific issue',
     )
     parser.add_option(
@@ -104,33 +121,78 @@ def view_cmd(scriptname, cmd, argv):
         print 'GAH! Do not recognize url: {0}'.format(remote_url)
         return 1
 
-    repo_api = API('https://api.github.com/repos/{user}/{repo}'.format(
-        user=user, repo=repo))
+    try:
+        issue_details = get_issue_details(user, repo, int(args[0]))
+    except Exception as exc:
+        print exc
+        print 'Getting issue list from cache ...'
+        issue_details = load_cache()['get_issue_details'][args[0]]
 
-    issue = repo_api.issues(int(args[0])).get().json()
     print TERM.bold_white('#{number}:  {title}'.format(
-        number=str(issue['number']),
-        title=issue['title']))
+        number=str(issue_details['number']),
+        title=issue_details['title']))
     print '{user} opened this issue {created}.'.format(
-        user=issue['user']['login'],
-        created=issue['created_at'])
-    print issue['html_url']
+        user=issue_details['user']['login'],
+        created=issue_details['created_at'])
+    print issue_details['html_url']
     print ''
-    print indent(issue['body'])
+    print indent(issue_details['body'])
     print ''
-    if not issue['comments']:
+    if not issue_details['comments_list']:
         print 'No comments'
 
     else:
-        comments_api = API('https://api.github.com/repos/{user}/{repo}/issues/{num}'.format(
-            user=user, repo=repo, num=int(args[0])))
-
-        for comment in comments_api.comments.get().json():
+        for comment in issue_details['comments_list']:
             print comment['updated_at'], comment['user']['login']
             print indent(comment['body'])
             # print comment.keys()
             print ''
 
+    return 0
+
+
+def cache_cmd(scriptname, cmd, argv):
+    """Caches issue data locally"""
+    parser = build_parser(
+        'usage: %prog cache [OPTIONS]',
+        description='Caches issue data locally',
+    )
+    parser.add_option(
+        '-r', '--remote',
+        dest='remote',
+        metavar='REMOTE',
+        help='Name of remote',
+        default='origin'
+    )
+
+    (options, args) = parser.parse_args(argv)
+
+    remote_url = get_remote(options.remote)
+    if remote_url.startswith('git'):
+        user, repo = remote_url.split(':')[1].split('/')
+        repo = repo.split('.')[0]
+    else:
+        print 'GAH! Do not recognize url: {0}'.format(remote_url)
+        return 1
+
+    if not '.git' in os.listdir('.'):
+        print 'Please run this at the top-most level of the git clone.'
+        return 1
+
+    data = {}
+    data['get_issues'] = []
+    data['get_issue_details'] = {}
+
+    print 'Getting issue list ...'
+    data['get_issues'] = get_issues(user, repo)
+    print '{0} issues to fetch.'.format(len(data['get_issues']))
+    for issue in data['get_issues']:
+        num = issue['number']
+        print 'Fetching issue {0} ...'.format(num)
+        data['get_issue_details'][num] = get_issue_details(user, repo, int(num))
+
+    save_cache(data)
+    print 'Data cached.'
     return 0
 
 
