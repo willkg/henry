@@ -1,16 +1,18 @@
-===============================
-
-===============================
+=====
+Henry
+=====
 
 Henry is a GitHub issues cli
 
 Features
 --------
 
-* TODO
+* lists issues
+* saves issues locally so you can look at them even while on the road
+
 
 :Code:         https://github.com/willkg/henry/
-:Issues:         https://github.com/willkg/henry/issues
+:Issues:       https://github.com/willkg/henry/issues
 :License:      BSD 3-clause; See LICENSE
 :Contributors: See AUTHORS.rst
 

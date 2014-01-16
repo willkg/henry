@@ -33,7 +33,10 @@ setup(
     url='https://github.com/willkg/henry',
     packages=find_packages(),
     include_package_data=True,
+    scripts=['bin/henry-cmd'],
     install_requires=[
+        'blessings',
+        'requests',
     ],
     license="BSD",
     zip_safe=True,
