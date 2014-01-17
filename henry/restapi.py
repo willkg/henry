@@ -1,6 +1,7 @@
 import json
 import urlparse
 
+from requests.auth import HTTPBasicAuth
 import requests
 
 
@@ -148,12 +149,12 @@ class Resource(object):
     def _get_auth_header(self, auth_token):
         if auth_token is not None:
             return {
-                'Authorization': 'Token {0}'.format(auth_token)
+                'Authorization': 'Basic {0}'.format(auth_token)
             }
         return {}
 
     def _request(self, method, data=None, params=None, headers=None,
-                 url=None):
+                 url=None, auth=None):
         if not url:
             url = self._kwargs['url']
 
@@ -164,8 +165,16 @@ class Resource(object):
         if headers:
             default_headers.update(headers)
 
-        resp = self.session.request(method, url, data=data, params=params,
-                                    headers=default_headers)
+        args = {
+            'data': data,
+            'params': params,
+            'headers': default_headers,
+        }
+
+        if auth:
+            args['auth'] = auth
+
+        resp = self.session.request(method, url, **args)
 
         if 400 <= resp.status_code <= 499:
             print resp.content
@@ -179,10 +188,16 @@ class Resource(object):
 
         return resp
 
-    def get(self, auth_token=None, **kwargs):
-        headers = self._get_auth_header(auth_token)
+    def get(self, auth=None, **kwargs):
+        args = {
+            'params': kwargs
+        }
 
-        resp = self._request('GET', params=kwargs, headers=headers)
+        if auth:
+            args['auth'] = HTTPBasicAuth(*(auth.split(':')))
+
+        resp = self._request('GET', **args)
+
         if 200 <= resp.status_code <= 299:
             return resp
         raise RestAPIException(
@@ -274,18 +289,18 @@ class API(object):
         return Resource(url=urljoin(self.base_url, str(key)))
 
 
-def get_issues(owner, repo):
+def get_issues(owner, repo, auth=None):
     repo_api = API('https://api.github.com/repos/{user}/{repo}'.format(
         user=owner, repo=repo))
 
-    return repo_api.issues.get().json()
+    return repo_api.issues.get(auth=auth).json()
 
 
-def get_issue_details(owner, repo, number):
+def get_issue_details(owner, repo, number, auth=None):
     repo_api = API('https://api.github.com/repos/{user}/{repo}'.format(
         user=owner, repo=repo))
 
-    details = repo_api.issues(number).get().json()
+    details = repo_api.issues(number).get(auth=auth).json()
     if not details['comments']:
         details['comments_list'] = []
     else:

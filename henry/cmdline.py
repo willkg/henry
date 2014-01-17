@@ -1,4 +1,5 @@
 from optparse import OptionParser
+import datetime
 import json
 import os
 import subprocess
@@ -7,7 +8,7 @@ import textwrap
 import blessings
 
 from henry import __version__
-from henry.restapi import API, get_issues, get_issue_details
+from henry.restapi import get_issues, get_issue_details
 
 
 USAGE = '%prog [options] [command] [command-options]'
@@ -34,14 +35,26 @@ def load_cache():
         return json.load(fp)
 
 
+def get_auth():
+    path = os.path.expanduser('~/.githubauth')
+    if os.path.exists(path):
+        return open(path, 'r').read().strip()
+    return None
+
+
 def get_remote(remotename='origin'):
     # FIXME - cache this?
     remotes = git('remote', '-v').splitlines()
     remotes = [line.strip().split() for line in remotes if line.strip()]
     remotes = dict((part[0], part) for part in remotes)
 
-    # Return the url
-    return remotes[remotename][1]
+    remote_url = remotes[remotename][1]
+    if remote_url.startswith('git'):
+        user, repo = remote_url.split(':')[1].split('/')
+        repo = repo.split('.')[0]
+        return user, repo
+
+    raise Exception('GAH! Do not recognize url: {0}'.format(remote_url))
 
 
 def indent(text):
@@ -51,7 +64,15 @@ def indent(text):
 
 
 def build_parser(usage, **kwargs):
-    return OptionParser(usage=usage, version=VERSION, **kwargs)
+    parser = OptionParser(usage=usage, version=VERSION, **kwargs)
+    parser.add_option(
+        '-r', '--remote',
+        dest='remote',
+        metavar='REMOTE',
+        help='Name of remote',
+        default='origin'
+    )
+    return parser
 
 
 def list_cmd(scriptname, cmd, argv):
@@ -60,30 +81,26 @@ def list_cmd(scriptname, cmd, argv):
         'usage: %prog list [OPTIONS]',
         description='Lists open issues',
     )
-    parser.add_option(
-        '-r', '--remote',
-        dest='remote',
-        metavar='REMOTE',
-        help='Name of remote',
-        default='origin'
-    )
 
     (options, args) = parser.parse_args(argv)
 
-    remote_url = get_remote(options.remote)
-    if remote_url.startswith('git'):
-        user, repo = remote_url.split(':')[1].split('/')
-        repo = repo.split('.')[0]
-    else:
-        print 'GAH! Do not recognize url: {0}'.format(remote_url)
-        return 1
+    user, repo = get_remote(options.remote)
+    auth = get_auth()
+
+    if auth:
+        print 'Using authentication token'
 
     try:
-        issues_list = get_issues(user, repo)
+        issues_list = get_issues(user, repo, auth)
     except Exception as exc:
         print exc
-        print 'Getting issue list from cache ...'
-        issues_list = load_cache()['get_issues']
+        cached_data = load_cache()
+        print 'Getting issue list from cache from {0} ...'.format(
+            cached_data['created'])
+        issues_list = cached_data['get_issues']
+
+    print 'Issues for {0}/{1}:'.format(user, repo)
+    print ''
 
     for issue in issues_list:
         print TERM.bold_white('#{number}: {title}'.format(
@@ -99,13 +116,6 @@ def view_cmd(scriptname, cmd, argv):
         'usage: %prog view [OPTIONS] NUM',
         description='Views a specific issue',
     )
-    parser.add_option(
-        '-r', '--remote',
-        dest='remote',
-        metavar='REMOTE',
-        help='Name of remote',
-        default='origin'
-    )
 
     (options, args) = parser.parse_args(argv)
 
@@ -113,20 +123,17 @@ def view_cmd(scriptname, cmd, argv):
         parser.print_help()
         return 1
 
-    remote_url = get_remote(options.remote)
-    if remote_url.startswith('git'):
-        user, repo = remote_url.split(':')[1].split('/')
-        repo = repo.split('.')[0]
-    else:
-        print 'GAH! Do not recognize url: {0}'.format(remote_url)
-        return 1
+    user, repo = get_remote(options.remote)
+    auth = get_auth()
 
     try:
-        issue_details = get_issue_details(user, repo, int(args[0]))
+        issue_details = get_issue_details(user, repo, int(args[0]), auth)
     except Exception as exc:
         print exc
-        print 'Getting issue list from cache ...'
-        issue_details = load_cache()['get_issue_details'][args[0]]
+        cached_data = load_cache()
+        print 'Getting issue list from cache from {0} ...'.format(
+            cached_data['created'])
+        issue_details = cached_data['get_issue_details'][args[0]]
 
     print TERM.bold_white('#{number}:  {title}'.format(
         number=str(issue_details['number']),
@@ -157,23 +164,10 @@ def cache_cmd(scriptname, cmd, argv):
         'usage: %prog cache [OPTIONS]',
         description='Caches issue data locally',
     )
-    parser.add_option(
-        '-r', '--remote',
-        dest='remote',
-        metavar='REMOTE',
-        help='Name of remote',
-        default='origin'
-    )
 
     (options, args) = parser.parse_args(argv)
 
-    remote_url = get_remote(options.remote)
-    if remote_url.startswith('git'):
-        user, repo = remote_url.split(':')[1].split('/')
-        repo = repo.split('.')[0]
-    else:
-        print 'GAH! Do not recognize url: {0}'.format(remote_url)
-        return 1
+    user, repo = get_remote(options.remote)
 
     if not '.git' in os.listdir('.'):
         print 'Please run this at the top-most level of the git clone.'
@@ -190,6 +184,8 @@ def cache_cmd(scriptname, cmd, argv):
         num = issue['number']
         print 'Fetching issue {0} ...'.format(num)
         data['get_issue_details'][num] = get_issue_details(user, repo, int(num))
+
+    data['created'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
     save_cache(data)
     print 'Data cached.'
@@ -232,7 +228,7 @@ def cmdline_handler(scriptname, argv):
         if cmd == command:
             return fun(scriptname, command, argv)
 
-    err('Command "{0}" does not exist.'.format(command))
+    print 'Command "{0}" does not exist.'.format(command)
     print_help(scriptname)
 
     return 1
