@@ -24,7 +24,7 @@ clean-pyc:
 	find . -name '*~' -exec rm -f {} +
 
 lint:
-	flake8 henry tests
+	flake8 henry
 
 test:
 	python setup.py test

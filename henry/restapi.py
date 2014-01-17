@@ -304,8 +304,9 @@ def get_issue_details(owner, repo, number, auth=None):
     if not details['comments']:
         details['comments_list'] = []
     else:
-        comments_api = API('https://api.github.com/repos/{user}/{repo}/issues/{num}'.format(
-            user=owner, repo=repo, num=number))
+        comments_api = API(
+            'https://api.github.com/repos/{user}/{repo}/issues/{num}'.format(
+                user=owner, repo=repo, num=number))
 
         details['comments_list'] = comments_api.comments.get().json()
 

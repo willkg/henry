@@ -60,7 +60,8 @@ def get_remote(remotename='origin'):
 def indent(text):
     wrapper = textwrap.TextWrapper(
         initial_indent='    ', subsequent_indent='    ')
-    return '\n'.join(['\n'.join(wrapper.wrap(block)) for block in text.split('\n')])
+    return '\n'.join(['\n'.join(wrapper.wrap(block))
+                      for block in text.split('\n')])
 
 
 def build_parser(usage, **kwargs):
@@ -183,7 +184,8 @@ def cache_cmd(scriptname, cmd, argv):
     for issue in data['get_issues']:
         num = issue['number']
         print 'Fetching issue {0} ...'.format(num)
-        data['get_issue_details'][num] = get_issue_details(user, repo, int(num))
+        data['get_issue_details'][num] = get_issue_details(
+            user, repo, int(num))
 
     data['created'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
