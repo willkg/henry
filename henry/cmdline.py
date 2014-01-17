@@ -54,6 +54,11 @@ def get_remote(remotename='origin'):
         repo = repo.split('.')[0]
         return user, repo
 
+    if remote_url.startswith('https'):
+        user, repo = remote_url.split('/')[-2:]
+        repo = repo.split('.')[0]
+        return user, repo
+
     raise Exception('GAH! Do not recognize url: {0}'.format(remote_url))
 
 
