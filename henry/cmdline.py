@@ -132,6 +132,9 @@ def view_cmd(scriptname, cmd, argv):
     user, repo = get_remote(options.remote)
     auth = get_auth()
 
+    if auth:
+        print 'Using authentication token'
+
     try:
         issue_details = get_issue_details(user, repo, int(args[0]), auth)
     except Exception as exc:
@@ -174,23 +177,27 @@ def cache_cmd(scriptname, cmd, argv):
     (options, args) = parser.parse_args(argv)
 
     user, repo = get_remote(options.remote)
+    auth = get_auth()
 
     if not '.git' in os.listdir('.'):
         print 'Please run this at the top-most level of the git clone.'
         return 1
+
+    if auth:
+        print 'Using authentication token'
 
     data = {}
     data['get_issues'] = []
     data['get_issue_details'] = {}
 
     print 'Getting issue list ...'
-    data['get_issues'] = get_issues(user, repo)
+    data['get_issues'] = get_issues(user, repo, auth)
     print '{0} issues to fetch.'.format(len(data['get_issues']))
     for issue in data['get_issues']:
         num = issue['number']
         print 'Fetching issue {0} ...'.format(num)
         data['get_issue_details'][num] = get_issue_details(
-            user, repo, int(num))
+            user, repo, int(num), auth)
 
     data['created'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 

@@ -177,6 +177,7 @@ class Resource(object):
         resp = self.session.request(method, url, **args)
 
         if 400 <= resp.status_code <= 499:
+            print resp.headers
             print resp.content
             raise Http4xxException(
                 'HTTP {0}: {1} {2}'.format(resp.status_code, method, url),
